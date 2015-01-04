@@ -5,19 +5,19 @@ function randrange(min, max)
 end
 
 function randomProperties()
-	local fStart = randrange(200.0, 1000.0)
-	return {
-		oszA = love.math.random(1, 4),
-		oszB = love.math.random(1, 4), 
-		oszMix = love.math.random(),
-		fStart = fStart,
-		fCutoff = math.max(fStart - love.math.random(100, 500), 30),
-		fSpeed = randrange(0.00005, 0.00007),
-		decay = randrange(0.1, 0.3),
-		sustain = 0, --love.math.random() * 0.2,
-		shotInterval = randrange(0.05, 0.15),
-		clamp = randrange(0.01, 1.0)
-	}
+	local props = {}
+	for i, v in pairs(parameters) do
+		if v.integer then
+			props[v.key] = love.math.random(v.min, v.max)
+		else
+			props[v.key] = randrange(v.min, v.max)
+		end
+	end
+	
+	if props.fCutoff > props.fStart then props.fCutoff = props.fStart / 2 end
+	props.sustain = 0
+	
+	return props
 end
 
 function setTable(a, b)
@@ -31,24 +31,32 @@ function love.load()
 	lastR = false
 	lastS = false
 	lastL = false
+	messageStr = ""
+	
+	parameters = {
+		{name = "oscillator 1", key = "oszA", min = 1, max = 4, integer = true},
+		{name = "oscillator 2", key = "oszB", min = 1, max = 4, integer = true},
+		{name = "oscillator mix", key = "oszMix", min = 0.0, max = 1.0, integer = false},
+		{name = "frequency start", key = "fStart", min = 200.0, max = 2000.0, integer = false},
+		{name = "frequency cutoff", key = "fCutoff", min = 30.0, max = 1000.0, integer = false},
+		{name = "frequency sweep speed", key = "fSpeed", min = 0.00001, max = 0.0001, integer = false},
+		{name = "volume decay length", key = "decay", min = 0.0, max = 1.0, integer = false},
+		{name = "volume sustain length", key = "sustain", min = 0.0, max = 1.0, integer = false},
+		{name = "shot interval", key = "shotInterval", min = 0.0, max = 0.4, integer = false},
+		{name = "clamp threshold", key = "clamp", min = 0.0, max = 1.0, integer = false}
+	}
+	
 	currentSound = nil
 	properties = randomProperties()
-	messageStr = ""
 	
 	local spacing = 35
 	local height = 25
 	local w = 400
 	local x = love.window.getWidth() / 2 - w / 2.0
-	addSlider("oscillator 1", properties, "oszA", 1, 4.04, true, x, spacing * 1, w, height)
-	addSlider("oscillator 2", properties, "oszB", 1, 4.04, true, x, spacing * 2, w, height)
-	addSlider("oscillator mix", properties, "oszMix", 0.0, 1.0, false, x, spacing * 3, w, height)
-	addSlider("frequency start", properties, "fStart", 200.0, 2000.0, false, x, spacing * 4, w, height)
-	addSlider("frequency cutoff", properties, "fCutoff", 30.0, 1000.0, false, x, spacing * 5, w, height)
-	addSlider("frequency sweep speed", properties, "fSpeed", 0.00001, 0.0001, false, x, spacing * 6, w, height)
-	addSlider("volume decay length", properties, "decay", 0.0, 1.0, false, x, spacing * 7, w, height)
-	addSlider("volume sustain length", properties, "sustain", 0.0, 1.0, false, x, spacing * 8, w, height)
-	addSlider("shot interval", properties, "shotInterval", 0.0, 0.4, false, x, spacing * 9, w, height)
-	addSlider("clamp threshold", properties, "clamp", 0.0, 1.0, false, x, spacing * 10, w, height)
+	for i, param in ipairs(parameters) do
+		-- a little extra for max, so you can reach it with the mouse more practically
+		addSlider(param.name, properties, param.key, param.min, param.max + (param.integer and 0.04 or 0.0), param.integer, x, spacing * i, w, height)
+	end
 	
 	shotsToFire = 0
 	nextShot = 0
@@ -193,19 +201,20 @@ end
 function love.update()
 	updateSliders()
 	
-	if love.keyboard.isDown(" ") and lastPressedSpace == false then
-		setTable(properties, randomProperties()) -- because of the sliders
-		
+	local play = function()
 		currentSound = generateShootSound(properties)
 		shotsToFire = 10
 		nextShot = 0
 	end
+	
+	if love.keyboard.isDown(" ") and lastPressedSpace == false then
+		setTable(properties, randomProperties()) -- because of the sliders
+		play()
+	end
 	lastPressedSpace = love.keyboard.isDown(" ")
 	
 	if love.keyboard.isDown("r") and not lastR then
-		currentSound = generateShootSound(properties)
-		shotsToFire = 10
-		nextShot = 0
+		play()
 	end
 	lastR = love.keyboard.isDown("r")
 	
@@ -218,6 +227,26 @@ function love.update()
 		setTable(properties, loadstring(love.filesystem.read("soundProps.lua"))())
 	end
 	lastL = love.keyboard.isDown("l")
+	
+	if love.keyboard.isDown("m") and not lastM then
+		local n = 0
+		for k, v in pairs(parameters) do n = n + 1 end
+		n = love.math.random(1, n)
+		
+		for i, param in pairs(parameters) do
+			n = n - 1
+			if n == 0 then
+				if param.integer then
+					properties[param.key] = clamp(properties[param.key] + (love.math.random() > 0.5 and 1 or -1), param.min, param.max)
+				else
+					properties[param.key] = properties[param.key] + (param.max - param.min) * 0.02 * (love.math.random() > 0.5 and 1 or -1)
+					properties[param.key] = clamp(properties[param.key] , param.min, param.max)
+				end
+				break
+			end
+		end
+	end
+	lastM = love.keyboard.isDown("m")
 	
 	if nextShot < love.timer.getTime() and shotsToFire > 0 then
 		shotsToFire = shotsToFire - 1
@@ -233,5 +262,5 @@ function love.draw()
 	love.graphics.setColor({255, 255, 255, 255})
 	love.graphics.printf("Oscillators: 1 = sine, 2 = triangle, 3 = square, 4 = whistle", 0, 5, love.window.getWidth(), "center")
 	
-	love.graphics.printf("Press <space> to generate and play a new sound and <r> to play a sound. \nPress <s> to write a sounds properties (a table) to " .. love.filesystem.getSaveDirectory() .. "/" .. getSaveFile() .. "\nand <l> to load it.\n" .. messageStr, 5, 400, love.window.getWidth())
+	love.graphics.printf("Press <space> to generate and play a new sound and <r> to play a sound. \nPress <m> to mutate the sound. \nPress <s> to write a sounds properties (a table) to " .. love.filesystem.getSaveDirectory() .. "/" .. getSaveFile() .. "\nand <l> to load it.\n" .. messageStr, 5, 400, love.window.getWidth())
 end
