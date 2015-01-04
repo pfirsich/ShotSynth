@@ -30,6 +30,7 @@ function love.load()
 	lastPressedSpace = false
 	lastR = false
 	lastS = false
+	lastL = false
 	currentSound = nil
 	properties = randomProperties()
 	messageStr = ""
@@ -58,7 +59,7 @@ function getSaveFile()
 end
 
 function dictToStr(dict)
-	str = " = {\n"
+	str = "{\n"
 	for k, v in pairs(dict) do
 		str = str .. "\t" .. k .. " = " .. v .. ",\n"
 	end
@@ -69,7 +70,7 @@ end
 function saveSoundProperties(properties)
 	file, errorStr = love.filesystem.newFile("soundProps.lua", "w")
 	if file then
-		file:write("properties" .. dictToStr(properties))
+		file:write("return " .. dictToStr(properties))
 		file:close()
 		messageStr = "File saved."
 	else
@@ -183,6 +184,11 @@ function love.update()
 	end
 	lastS = love.keyboard.isDown("s")
 	
+	if love.keyboard.isDown("l") and not lastL then
+		setTable(properties, loadstring(love.filesystem.read("soundProps.lua"))())
+	end
+	lastL = love.keyboard.isDown("l")
+	
 	if nextShot < love.timer.getTime() and shotsToFire > 0 then
 		shotsToFire = shotsToFire - 1
 		nextShot = love.timer.getTime() + currentSound.properties.shotInterval * (math.random() * 0.1 + 1.0)
@@ -197,5 +203,5 @@ function love.draw()
 	love.graphics.setColor({255, 255, 255, 255})
 	love.graphics.printf("Oscillators: 1 = sine, 2 = triangle, 3 = square, 4 = whistle", 0, 5, love.window.getWidth(), "center")
 	
-	love.graphics.printf("Press <space> to generate and play a new sound and <r> to play a sound. \nPress <s> to write a sounds properties (a table) to " .. love.filesystem.getSaveDirectory() .. "/" .. getSaveFile() .. "\n\n" .. messageStr, 5, 400, love.window.getWidth())
+	love.graphics.printf("Press <space> to generate and play a new sound and <r> to play a sound. \nPress <s> to write a sounds properties (a table) to " .. love.filesystem.getSaveDirectory() .. "/" .. getSaveFile() .. "\nand <l> to load it.\n" .. messageStr, 5, 400, love.window.getWidth())
 end
