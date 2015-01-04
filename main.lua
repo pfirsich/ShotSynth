@@ -75,7 +75,37 @@ function saveSoundProperties(properties)
 		messageStr = "File saved."
 	else
 		messageStr = errorStr
+		return
 	end
+	
+	file, errorStr = love.filesystem.newFile("sound.wav", "w")
+	local bytes
+	function bytes(v, num)
+		local ret = ""
+		for i = 1, num do
+			ret = ret .. string.char(v % 256)
+			v = math.floor(v / 256)
+		end
+		return ret
+	end
+	
+	local word = function(v) return bytes(v, 2) end
+	local dword = function(v) return bytes(v, 4) end
+	
+	local dataStr = currentSound.soundData:getString()
+	
+	-- this is even on wikipedia! :)
+	fileString = "RIFF" .. dword(24 + 8 + dataStr:len() - 8) .. "WAVE" -- "fmt " length + data header + data - "RIFF" and "WAVE"
+	
+	-- format chunk
+	fileString = fileString .. "fmt " .. dword(16) .. word(1) .. word(1) -- chunk size, format: PCM, channels
+	.. dword(44100) .. dword(44100 * 2) .. word(2) .. word(16) -- sample rate, bytes/second, block size, bits per sample
+	
+	-- data chunk
+	fileString = fileString .. "data" .. dword(dataStr:len()) .. dataStr -- chunk size, data
+	
+	file:write(fileString)
+	file:close()
 end
 
 function osz_sin(freq, t)
